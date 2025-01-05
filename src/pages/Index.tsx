@@ -1,9 +1,10 @@
-import { useState } from "react";
 import { DollarSign, Wallet, CreditCard, TrendingUp } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { SubscriptionsList } from "@/components/SubscriptionsList";
 import { IncomeChart } from "@/components/IncomeChart";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
+import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { useState } from "react";
 
 // Define the Expense type to ensure consistency
 interface Expense {
@@ -40,7 +41,8 @@ const Index = () => {
   const totalExpenses = subscriptions.reduce((sum, sub) => sum + sub.price, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-8">
+    <div className="min-h-screen bg-background text-foreground p-8">
+      <DarkModeToggle />
       <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
         <h1 className="text-3xl font-bold">Personal Finance Dashboard</h1>
         
