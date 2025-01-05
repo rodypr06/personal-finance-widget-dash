@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { DollarSign, Wallet, CreditCard, TrendingUp } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { SubscriptionsList } from "@/components/SubscriptionsList";
 import { IncomeChart } from "@/components/IncomeChart";
+import { AddExpenseForm } from "@/components/AddExpenseForm";
 
-// Mock data - in a real app this would come from an API
-const mockSubscriptions = [
+// Initial mock data
+const initialMockSubscriptions = [
   { name: "Rent", price: 1200, status: "active" as const, nextBilling: "2024-05-01" },
   { name: "Utilities", price: 150, status: "pending" as const, nextBilling: "2024-04-28" },
   { name: "Internet", price: 60, status: "active" as const, nextBilling: "2024-05-15" },
@@ -20,6 +22,20 @@ const mockIncomeData = [
 ];
 
 const Index = () => {
+  const [subscriptions, setSubscriptions] = useState(initialMockSubscriptions);
+
+  const handleAddExpense = (newExpense: {
+    name: string;
+    price: number;
+    status: "active" | "cancelled" | "pending";
+    nextBilling: string;
+  }) => {
+    setSubscriptions([...subscriptions, newExpense]);
+  };
+
+  // Calculate total monthly expenses
+  const totalExpenses = subscriptions.reduce((sum, sub) => sum + sub.price, 0);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-8">
       <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
@@ -41,7 +57,7 @@ const Index = () => {
           />
           <MetricCard
             title="Monthly Expenses"
-            value="$1,410"
+            value={`$${totalExpenses.toFixed(2)}`}
             icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
             trend={{ value: 2.4, isPositive: false }}
           />
@@ -55,9 +71,12 @@ const Index = () => {
 
         {/* Charts and Lists */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <IncomeChart data={mockIncomeData} />
-          <div className="lg:col-span-1">
-            <SubscriptionsList subscriptions={mockSubscriptions} />
+          <div className="lg:col-span-3">
+            <IncomeChart data={mockIncomeData} />
+          </div>
+          <div className="lg:col-span-1 space-y-4">
+            <AddExpenseForm onAddExpense={handleAddExpense} />
+            <SubscriptionsList subscriptions={subscriptions} />
           </div>
         </div>
       </div>
