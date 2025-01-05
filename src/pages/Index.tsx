@@ -5,11 +5,19 @@ import { SubscriptionsList } from "@/components/SubscriptionsList";
 import { IncomeChart } from "@/components/IncomeChart";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
 
+// Define the Expense type to ensure consistency
+interface Expense {
+  name: string;
+  price: number;
+  status: "active" | "cancelled" | "pending";
+  nextBilling: string;
+}
+
 // Initial mock data
-const initialMockSubscriptions = [
-  { name: "Rent", price: 1200, status: "active" as const, nextBilling: "2024-05-01" },
-  { name: "Utilities", price: 150, status: "pending" as const, nextBilling: "2024-04-28" },
-  { name: "Internet", price: 60, status: "active" as const, nextBilling: "2024-05-15" },
+const initialMockSubscriptions: Expense[] = [
+  { name: "Rent", price: 1200, status: "active", nextBilling: "2024-05-01" },
+  { name: "Utilities", price: 150, status: "pending", nextBilling: "2024-04-28" },
+  { name: "Internet", price: 60, status: "active", nextBilling: "2024-05-15" },
 ];
 
 const mockIncomeData = [
@@ -22,14 +30,9 @@ const mockIncomeData = [
 ];
 
 const Index = () => {
-  const [subscriptions, setSubscriptions] = useState(initialMockSubscriptions);
+  const [subscriptions, setSubscriptions] = useState<Expense[]>(initialMockSubscriptions);
 
-  const handleAddExpense = (newExpense: {
-    name: string;
-    price: number;
-    status: "active" | "cancelled" | "pending";
-    nextBilling: string;
-  }) => {
+  const handleAddExpense = (newExpense: Expense) => {
     setSubscriptions([...subscriptions, newExpense]);
   };
 
