@@ -16,7 +16,7 @@ export function SubscriptionsList({ subscriptions }: SubscriptionsListProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Active Subscriptions</CardTitle>
+        <CardTitle>Monthly Expenses</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -28,7 +28,7 @@ export function SubscriptionsList({ subscriptions }: SubscriptionsListProps) {
               <div>
                 <p className="font-medium">{sub.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  Next billing: {sub.nextBilling}
+                  Due: {sub.nextBilling}
                 </p>
               </div>
               <div className="flex items-center gap-4">
