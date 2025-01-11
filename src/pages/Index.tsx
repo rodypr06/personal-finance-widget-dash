@@ -4,6 +4,7 @@ import { SubscriptionsList } from "@/components/SubscriptionsList";
 import { IncomeChart } from "@/components/IncomeChart";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { AvailableMoneyWidget } from "@/components/AvailableMoneyWidget";
 import { useState } from "react";
 
 // Define the Expense type to ensure consistency
@@ -32,6 +33,7 @@ const mockIncomeData = [
 
 const Index = () => {
   const [subscriptions, setSubscriptions] = useState<Expense[]>(initialMockSubscriptions);
+  const monthlyIncome = 4200; // Fixed monthly income for demo
 
   const handleAddExpense = (newExpense: Expense) => {
     setSubscriptions([...subscriptions, newExpense]);
@@ -50,7 +52,7 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="Monthly Income"
-            value="$4,200"
+            value={`$${monthlyIncome}`}
             icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
             trend={{ value: 12, isPositive: true }}
           />
@@ -73,6 +75,9 @@ const Index = () => {
             trend={{ value: 4.2, isPositive: true }}
           />
         </div>
+
+        {/* Available Money Widget */}
+        <AvailableMoneyWidget income={monthlyIncome} expenses={totalExpenses} />
 
         {/* Charts and Lists */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
