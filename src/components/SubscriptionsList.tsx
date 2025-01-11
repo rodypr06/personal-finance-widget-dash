@@ -1,15 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-interface Subscription {
-  name: string;
-  price: number;
-  status: "active" | "cancelled" | "pending";
-  nextBilling: string;
-}
+import { Expense } from "@/lib/supabase";
 
 interface SubscriptionsListProps {
-  subscriptions: Subscription[];
+  subscriptions: Expense[];
 }
 
 export function SubscriptionsList({ subscriptions }: SubscriptionsListProps) {
@@ -28,7 +22,7 @@ export function SubscriptionsList({ subscriptions }: SubscriptionsListProps) {
               <div>
                 <p className="font-medium">{sub.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  Due: {sub.nextBilling}
+                  Due: {sub.next_billing}
                 </p>
               </div>
               <div className="flex items-center gap-4">

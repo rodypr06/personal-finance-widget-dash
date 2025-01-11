@@ -9,7 +9,7 @@ interface AddExpenseFormProps {
     name: string;
     price: number;
     status: "active" | "cancelled" | "pending";
-    nextBilling: string;
+    next_billing: string;
   }) => void;
 }
 
@@ -31,7 +31,7 @@ export function AddExpenseForm({ onAddExpense }: AddExpenseFormProps) {
       name,
       price: parseFloat(price),
       status,
-      nextBilling,
+      next_billing: nextBilling,
     });
 
     // Reset form
