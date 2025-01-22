@@ -18,6 +18,7 @@ export interface Expense {
   status: 'active' | 'cancelled' | 'pending';
   next_billing: string;
   created_at: string;
+  user_id: string;
 }
 
 export interface IncomeHistory {
@@ -25,4 +26,5 @@ export interface IncomeHistory {
   amount: number;
   date: string;
   created_at: string;
+  user_id: string;
 }
