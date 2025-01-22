@@ -8,29 +8,9 @@ import { AvailableMoneyWidget } from "@/components/AvailableMoneyWidget";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, type Expense, type IncomeHistory } from "@/lib/supabase";
 import { toast } from "sonner";
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
-import { useEffect, useState } from "react";
 
 const Index = () => {
   const queryClient = useQueryClient();
-  const [session, setSession] = useState(null);
-
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   // Fetch expenses
   const { data: expenses = [], isLoading: expensesLoading } = useQuery({
@@ -48,7 +28,6 @@ const Index = () => {
       
       return data as Expense[];
     },
-    enabled: !!session, // Only fetch when user is authenticated
   });
 
   // Fetch income history
@@ -67,7 +46,6 @@ const Index = () => {
       
       return data as IncomeHistory[];
     },
-    enabled: !!session, // Only fetch when user is authenticated
   });
 
   // Calculate total monthly expenses
@@ -84,15 +62,10 @@ const Index = () => {
     amount: income.amount
   }));
 
-  const handleAddExpense = async (newExpense: Omit<Expense, 'id' | 'created_at'>) => {
-    if (!session?.user?.id) {
-      toast.error('You must be logged in to add expenses');
-      return;
-    }
-
+  const handleAddExpense = async (newExpense: Omit<Expense, 'id' | 'created_at' | 'user_id'>) => {
     const { error } = await supabase
       .from('expenses')
-      .insert([{ ...newExpense, user_id: session.user.id }]);
+      .insert([newExpense]);
 
     if (error) {
       toast.error('Failed to add expense');
@@ -103,20 +76,6 @@ const Index = () => {
     queryClient.invalidateQueries({ queryKey: ['expenses'] });
   };
 
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <Auth 
-            supabaseClient={supabase}
-            appearance={{ theme: ThemeSupa }}
-            providers={['google']}
-          />
-        </div>
-      </div>
-    );
-  }
-
   if (expensesLoading || incomeLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
@@ -125,14 +84,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-8">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-end items-center mb-8">
         <DarkModeToggle />
-        <button
-          onClick={() => supabase.auth.signOut()}
-          className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90"
-        >
-          Sign Out
-        </button>
       </div>
       <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
         <h1 className="text-3xl font-bold">Personal Finance Dashboard</h1>
