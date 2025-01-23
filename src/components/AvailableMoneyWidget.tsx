@@ -65,12 +65,15 @@ export function AvailableMoneyWidget({ income, expenses }: AvailableMoneyWidgetP
                   dataKey="month" 
                   fontSize={12}
                   tickLine={false}
+                  axisLine={true}
+                  padding={{ left: 0, right: 0 }}
                 />
                 <YAxis 
                   fontSize={12}
                   tickLine={false}
-                  axisLine={false}
+                  axisLine={true}
                   tickFormatter={(value) => `$${value}`}
+                  padding={{ top: 0, bottom: 0 }}
                 />
                 <Tooltip 
                   formatter={(value: number) => [`$${value}`, 'Amount']}
