@@ -76,6 +76,20 @@ const Index = () => {
     queryClient.invalidateQueries({ queryKey: ['expenses'] });
   };
 
+  const handleAddIncome = async (newIncome: Omit<IncomeHistory, 'id' | 'created_at' | 'user_id'>) => {
+    const { error } = await supabase
+      .from('income_history')
+      .insert([newIncome]);
+
+    if (error) {
+      toast.error('Failed to add income');
+      return;
+    }
+
+    toast.success('Income added successfully');
+    queryClient.invalidateQueries({ queryKey: ['income'] });
+  };
+
   if (expensesLoading || incomeLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
@@ -127,7 +141,10 @@ const Index = () => {
             <IncomeChart data={incomeChartData} />
           </div>
           <div className="lg:col-span-1 space-y-4">
-            <AddExpenseForm onAddExpense={handleAddExpense} />
+            <AddExpenseForm 
+              onAddExpense={handleAddExpense}
+              onAddIncome={handleAddIncome}
+            />
             <SubscriptionsList subscriptions={expenses} />
           </div>
         </div>
