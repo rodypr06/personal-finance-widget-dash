@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useEffect } from "react";
 import { useSessionContext } from '@supabase/auth-helpers-react';
 import { Button } from "@/components/ui/button";
+import { Expense } from "@/lib/supabase";
 
 const Index = () => {
   const queryClient = useQueryClient();
@@ -41,12 +42,15 @@ const Index = () => {
         throw error;
       }
       
-      return data;
+      // Type assertion to ensure status is one of the allowed values
+      return data.map(expense => ({
+        ...expense,
+        status: expense.status as "active" | "cancelled" | "pending"
+      })) as Expense[];
     },
     enabled: !!session // Only fetch if user is authenticated
   });
 
-  // Fetch income history
   const { data: incomeHistory = [], isLoading: incomeLoading } = useQuery({
     queryKey: ['income'],
     queryFn: async () => {
