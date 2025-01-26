@@ -16,6 +16,7 @@ interface AddExpenseFormProps {
   onAddIncome: (income: {
     amount: number;
     date: string;
+    name: string;
   }) => void;
 }
 
@@ -42,7 +43,7 @@ export function AddExpenseForm({ onAddExpense, onAddIncome }: AddExpenseFormProp
         next_billing: date,
       });
     } else {
-      if (!amount || !date) {
+      if (!amount || !date || !name) {
         toast.error("Please fill in all fields");
         return;
       }
@@ -50,6 +51,7 @@ export function AddExpenseForm({ onAddExpense, onAddIncome }: AddExpenseFormProp
       onAddIncome({
         amount: parseFloat(amount),
         date,
+        name,
       });
     }
 
@@ -81,21 +83,19 @@ export function AddExpenseForm({ onAddExpense, onAddIncome }: AddExpenseFormProp
         </RadioGroup>
       </div>
 
-      {entryType === "expense" && (
-        <div className="space-y-2">
-          <Input
-            placeholder="Expense name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-      )}
+      <div className="space-y-2">
+        <Input
+          placeholder={`${entryType === "expense" ? "Expense name" : "Income source"}`}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
       
       <div className="space-y-2">
         <Input
           type="number"
           step="0.01"
-          placeholder={`${entryType === "expense" ? "Amount" : "Income amount"}`}
+          placeholder="Amount"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />

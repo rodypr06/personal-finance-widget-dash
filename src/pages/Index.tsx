@@ -21,6 +21,7 @@ interface Income {
   id: string;
   amount: number;
   date: string;
+  name: string;
   created_at: string;
 }
 
@@ -49,6 +50,7 @@ const Index = () => {
       id: '1',
       amount: 5000,
       date: '2024-03-01',
+      name: 'Salary',
       created_at: new Date().toISOString(),
     }
   ]);
@@ -85,6 +87,11 @@ const Index = () => {
     };
     setIncomeHistory([...incomeHistory, income]);
     toast.success('Income added successfully');
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    setExpenses(expenses.filter(expense => expense.id !== id));
+    toast.success('Expense deleted successfully');
   };
 
   return (
@@ -136,7 +143,10 @@ const Index = () => {
               onAddExpense={handleAddExpense}
               onAddIncome={handleAddIncome}
             />
-            <SubscriptionsList subscriptions={expenses} />
+            <SubscriptionsList 
+              subscriptions={expenses} 
+              onDeleteExpense={handleDeleteExpense}
+            />
           </div>
         </div>
       </div>
