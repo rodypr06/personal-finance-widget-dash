@@ -1,6 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Expense } from "@/lib/supabase";
+
+interface Expense {
+  id: string;
+  name: string;
+  price: number;
+  status: 'active' | 'cancelled' | 'pending';
+  next_billing: string;
+}
 
 interface SubscriptionsListProps {
   subscriptions: Expense[];
