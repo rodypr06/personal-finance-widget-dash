@@ -1,12 +1,9 @@
-import { DollarSign, Wallet, CreditCard, TrendingUp } from "lucide-react";
-import { MetricCard } from "@/components/MetricCard";
-import { SubscriptionsList } from "@/components/SubscriptionsList";
-import { IncomeChart } from "@/components/IncomeChart";
-import { AddExpenseForm } from "@/components/AddExpenseForm";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { AvailableMoneyWidget } from "@/components/AvailableMoneyWidget";
 import { useState } from "react";
 import { toast } from "sonner";
+import { MetricsGrid } from "@/components/MetricsGrid";
+import { DashboardContent } from "@/components/DashboardContent";
+import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { AvailableMoneyWidget } from "@/components/AvailableMoneyWidget";
 
 interface Expense {
   id: string;
@@ -102,53 +99,23 @@ const Index = () => {
       <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
         <h1 className="text-3xl font-bold">Personal Finance Dashboard</h1>
         
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            title="Monthly Income"
-            value={`$${monthlyIncome}`}
-            icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-            trend={{ value: 12, isPositive: true }}
-          />
-          <MetricCard
-            title="Total Savings"
-            value="$12,450"
-            icon={<Wallet className="h-4 w-4 text-muted-foreground" />}
-            trend={{ value: 8.5, isPositive: true }}
-          />
-          <MetricCard
-            title="Monthly Expenses"
-            value={`$${totalExpenses.toFixed(2)}`}
-            icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
-            trend={{ value: 2.4, isPositive: false }}
-          />
-          <MetricCard
-            title="Savings Rate"
-            value="32.5%"
-            icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
-            trend={{ value: 4.2, isPositive: true }}
-          />
-        </div>
+        <MetricsGrid 
+          monthlyIncome={monthlyIncome}
+          totalExpenses={totalExpenses}
+        />
 
-        {/* Available Money Widget */}
-        <AvailableMoneyWidget income={monthlyIncome} expenses={totalExpenses} />
+        <AvailableMoneyWidget 
+          income={monthlyIncome} 
+          expenses={totalExpenses} 
+        />
 
-        {/* Charts and Lists */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-3">
-            <IncomeChart data={incomeChartData} />
-          </div>
-          <div className="lg:col-span-1 space-y-4">
-            <AddExpenseForm 
-              onAddExpense={handleAddExpense}
-              onAddIncome={handleAddIncome}
-            />
-            <SubscriptionsList 
-              subscriptions={expenses} 
-              onDeleteExpense={handleDeleteExpense}
-            />
-          </div>
-        </div>
+        <DashboardContent 
+          expenses={expenses}
+          incomeChartData={incomeChartData}
+          onAddExpense={handleAddExpense}
+          onAddIncome={handleAddIncome}
+          onDeleteExpense={handleDeleteExpense}
+        />
       </div>
     </div>
   );
