@@ -8,25 +8,10 @@ import { AvailableMoneyWidget } from "@/components/AvailableMoneyWidget";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useEffect } from "react";
-import { useSessionContext } from '@supabase/auth-helpers-react';
-import { Button } from "@/components/ui/button";
 import { Expense } from "@/lib/supabase";
 
 const Index = () => {
   const queryClient = useQueryClient();
-  const { session, isLoading: sessionLoading } = useSessionContext();
-
-  // Handle login
-  const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: {
-        redirectTo: window.location.origin
-      }
-    });
-    if (error) toast.error('Failed to login');
-  };
 
   // Fetch expenses
   const { data: expenses = [], isLoading: expensesLoading } = useQuery({
@@ -42,13 +27,11 @@ const Index = () => {
         throw error;
       }
       
-      // Type assertion to ensure status is one of the allowed values
       return data.map(expense => ({
         ...expense,
         status: expense.status as "active" | "cancelled" | "pending"
       })) as Expense[];
-    },
-    enabled: !!session // Only fetch if user is authenticated
+    }
   });
 
   const { data: incomeHistory = [], isLoading: incomeLoading } = useQuery({
@@ -65,8 +48,7 @@ const Index = () => {
       }
       
       return data;
-    },
-    enabled: !!session // Only fetch if user is authenticated
+    }
   });
 
   // Calculate total monthly expenses
@@ -86,7 +68,7 @@ const Index = () => {
   const handleAddExpense = async (newExpense: any) => {
     const { error } = await supabase
       .from('expenses')
-      .insert([{ ...newExpense, user_id: session?.user?.id }]);
+      .insert([newExpense]);
 
     if (error) {
       toast.error('Failed to add expense');
@@ -100,7 +82,7 @@ const Index = () => {
   const handleAddIncome = async (newIncome: any) => {
     const { error } = await supabase
       .from('income_history')
-      .insert([{ ...newIncome, user_id: session?.user?.id }]);
+      .insert([newIncome]);
 
     if (error) {
       toast.error('Failed to add income');
@@ -111,22 +93,6 @@ const Index = () => {
     queryClient.invalidateQueries({ queryKey: ['income'] });
   };
 
-  if (sessionLoading) {
-    return <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-    </div>;
-  }
-
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <h1 className="text-3xl font-bold">Welcome to Personal Finance Dashboard</h1>
-        <p className="text-muted-foreground">Please login to continue</p>
-        <Button onClick={handleLogin}>Login with GitHub</Button>
-      </div>
-    );
-  }
-
   if (expensesLoading || incomeLoading) {
     return <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
@@ -135,15 +101,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-8">
-      <div className="flex justify-between items-center mb-8">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            Welcome, {session.user.email}
-          </span>
-          <Button variant="outline" onClick={() => supabase.auth.signOut()}>
-            Logout
-          </Button>
-        </div>
+      <div className="flex justify-end mb-8">
         <DarkModeToggle />
       </div>
       <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
