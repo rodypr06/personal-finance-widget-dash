@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { MetricsGrid } from "@/components/MetricsGrid";
 import { DashboardContent } from "@/components/DashboardContent";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { AvailableMoneyWidget } from "@/components/AvailableMoneyWidget";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Expense {
   id: string;
@@ -23,41 +24,122 @@ interface Income {
 }
 
 const Index = () => {
-  const [expenses, setExpenses] = useState<Expense[]>([
-    {
-      id: '1',
-      name: 'Netflix',
-      price: 15.99,
-      status: 'active',
-      next_billing: '2024-03-15',
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      name: 'Spotify',
-      price: 9.99,
-      status: 'active',
-      next_billing: '2024-03-20',
-      created_at: new Date().toISOString(),
-    }
-  ]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomeHistory, setIncomeHistory] = useState<Income[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [incomeHistory, setIncomeHistory] = useState<Income[]>([
-    {
-      id: '1',
-      amount: 5000,
-      date: '2024-03-01',
-      name: 'Salary',
-      created_at: new Date().toISOString(),
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch expenses
+      const expensesResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/expenses`, {
+        headers: {
+          Authorization: `Bearer ${supabase.supabaseKey}`,
+        },
+      });
+      const expensesData = await expensesResponse.json();
+      
+      // Fetch income
+      const incomeResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/income`, {
+        headers: {
+          Authorization: `Bearer ${supabase.supabaseKey}`,
+        },
+      });
+      const incomeData = await incomeResponse.json();
+      
+      setExpenses(expensesData.expenses || []);
+      setIncomeHistory(incomeData.income || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Failed to load data');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  const handleAddExpense = async (newExpense: {
+    name: string;
+    price: number;
+    status: "active" | "cancelled" | "pending";
+    next_billing: string;
+  }) => {
+    try {
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/expenses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${supabase.supabaseKey}`,
+        },
+        body: JSON.stringify(newExpense),
+      });
+      
+      if (!response.ok) throw new Error('Failed to add expense');
+      
+      await fetchData();
+      toast.success('Expense added successfully');
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      toast.error('Failed to add expense');
+    }
+  };
+
+  const handleAddIncome = async (newIncome: {
+    amount: number;
+    date: string;
+    name: string;
+  }) => {
+    try {
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/income`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${supabase.supabaseKey}`,
+        },
+        body: JSON.stringify(newIncome),
+      });
+      
+      if (!response.ok) throw new Error('Failed to add income');
+      
+      await fetchData();
+      toast.success('Income added successfully');
+    } catch (error) {
+      console.error('Error adding income:', error);
+      toast.error('Failed to add income');
+    }
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    try {
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/expenses`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${supabase.supabaseKey}`,
+        },
+        body: JSON.stringify({ id }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to delete expense');
+      
+      await fetchData();
+      toast.success('Expense deleted successfully');
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error('Failed to delete expense');
+    }
+  };
 
   // Calculate total monthly expenses
   const totalExpenses = expenses.reduce((sum, expense) => sum + expense.price, 0);
   
   // Get the most recent monthly income
   const monthlyIncome = incomeHistory.length > 0 
-    ? incomeHistory[incomeHistory.length - 1].amount 
+    ? incomeHistory[0].amount 
     : 0;
 
   // Format income data for the chart
@@ -66,30 +148,9 @@ const Index = () => {
     amount: income.amount
   }));
 
-  const handleAddExpense = (newExpense: any) => {
-    const expense: Expense = {
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
-      ...newExpense
-    };
-    setExpenses([...expenses, expense]);
-    toast.success('Expense added successfully');
-  };
-
-  const handleAddIncome = (newIncome: any) => {
-    const income: Income = {
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
-      ...newIncome
-    };
-    setIncomeHistory([...incomeHistory, income]);
-    toast.success('Income added successfully');
-  };
-
-  const handleDeleteExpense = (id: string) => {
-    setExpenses(expenses.filter(expense => expense.id !== id));
-    toast.success('Expense deleted successfully');
-  };
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground p-8">
