@@ -5,51 +5,53 @@ import { IncomeChart } from "@/components/IncomeChart";
 import { AddExpenseForm } from "@/components/AddExpenseForm";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { AvailableMoneyWidget } from "@/components/AvailableMoneyWidget";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Expense } from "@/lib/supabase";
+
+interface Expense {
+  id: string;
+  name: string;
+  price: number;
+  status: 'active' | 'cancelled' | 'pending';
+  next_billing: string;
+  created_at: string;
+}
+
+interface Income {
+  id: string;
+  amount: number;
+  date: string;
+  created_at: string;
+}
 
 const Index = () => {
-  const queryClient = useQueryClient();
-
-  // Fetch expenses
-  const { data: expenses = [], isLoading: expensesLoading } = useQuery({
-    queryKey: ['expenses'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .order('next_billing', { ascending: true });
-      
-      if (error) {
-        toast.error('Failed to fetch expenses');
-        throw error;
-      }
-      
-      return data.map(expense => ({
-        ...expense,
-        status: expense.status as "active" | "cancelled" | "pending"
-      })) as Expense[];
+  const [expenses, setExpenses] = useState<Expense[]>([
+    {
+      id: '1',
+      name: 'Netflix',
+      price: 15.99,
+      status: 'active',
+      next_billing: '2024-03-15',
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      name: 'Spotify',
+      price: 9.99,
+      status: 'active',
+      next_billing: '2024-03-20',
+      created_at: new Date().toISOString(),
     }
-  });
+  ]);
 
-  const { data: incomeHistory = [], isLoading: incomeLoading } = useQuery({
-    queryKey: ['income'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('income_history')
-        .select('*')
-        .order('date', { ascending: true });
-      
-      if (error) {
-        toast.error('Failed to fetch income history');
-        throw error;
-      }
-      
-      return data;
+  const [incomeHistory, setIncomeHistory] = useState<Income[]>([
+    {
+      id: '1',
+      amount: 5000,
+      date: '2024-03-01',
+      created_at: new Date().toISOString(),
     }
-  });
+  ]);
 
   // Calculate total monthly expenses
   const totalExpenses = expenses.reduce((sum, expense) => sum + expense.price, 0);
@@ -65,39 +67,25 @@ const Index = () => {
     amount: income.amount
   }));
 
-  const handleAddExpense = async (newExpense: any) => {
-    const { error } = await supabase
-      .from('expenses')
-      .insert([newExpense]);
-
-    if (error) {
-      toast.error('Failed to add expense');
-      return;
-    }
-
+  const handleAddExpense = (newExpense: any) => {
+    const expense: Expense = {
+      id: crypto.randomUUID(),
+      created_at: new Date().toISOString(),
+      ...newExpense
+    };
+    setExpenses([...expenses, expense]);
     toast.success('Expense added successfully');
-    queryClient.invalidateQueries({ queryKey: ['expenses'] });
   };
 
-  const handleAddIncome = async (newIncome: any) => {
-    const { error } = await supabase
-      .from('income_history')
-      .insert([newIncome]);
-
-    if (error) {
-      toast.error('Failed to add income');
-      return;
-    }
-
+  const handleAddIncome = (newIncome: any) => {
+    const income: Income = {
+      id: crypto.randomUUID(),
+      created_at: new Date().toISOString(),
+      ...newIncome
+    };
+    setIncomeHistory([...incomeHistory, income]);
     toast.success('Income added successfully');
-    queryClient.invalidateQueries({ queryKey: ['income'] });
   };
-
-  if (expensesLoading || incomeLoading) {
-    return <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-    </div>;
-  }
 
   return (
     <div className="min-h-screen bg-background text-foreground p-8">
