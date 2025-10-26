@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Finance Automation{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="flex justify-between items-center mb-xl">
+    <div>
+        <h1>Dashboard</h1>
+        <p class="text-muted">Your financial overview at a glance</p>
+    </div>
+
+    <!-- Month Selector -->
+    <div class="form-group" style="margin: 0; min-width: 200px;">
+        <select id="month-selector" class="form-select">
+            <!-- Populated by JavaScript -->
+        </select>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid grid-4 mb-xl">
+    <!-- Total Income -->
+    <div class="card summary-card">
+        <div class="summary-label">Total Income</div>
+        <div class="summary-value text-green" id="total-income">
+            <div class="loading"></div>
+        </div>
+        <div class="summary-change text-green" id="income-change">
+            <span>--</span>
+        </div>
+        <div class="summary-icon">📈</div>
+    </div>
+
+    <!-- Total Expenses -->
+    <div class="card summary-card">
+        <div class="summary-label">Total Expenses</div>
+        <div class="summary-value text-red" id="total-expenses">
+            <div class="loading"></div>
+        </div>
+        <div class="summary-change text-red" id="expenses-change">
+            <span>--</span>
+        </div>
+        <div class="summary-icon">💸</div>
+    </div>
+
+    <!-- Net Savings -->
+    <div class="card summary-card">
+        <div class="summary-label">Net Savings</div>
+        <div class="summary-value text-accent" id="net-savings">
+            <div class="loading"></div>
+        </div>
+        <div class="summary-change" id="savings-change">
+            <span>--</span>
+        </div>
+        <div class="summary-icon">💰</div>
+    </div>
+
+    <!-- Savings Rate -->
+    <div class="card summary-card">
+        <div class="summary-label">Savings Rate</div>
+        <div class="summary-value text-purple" id="savings-rate">
+            <div class="loading"></div>
+        </div>
+        <div class="summary-change text-muted" id="rate-target">
+            Target: 20%
+        </div>
+        <div class="summary-icon">🎯</div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="grid grid-2 mb-xl">
+    <!-- Category Breakdown -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Category Breakdown</h3>
+            <span class="text-muted" style="font-size: 0.875rem;">Top 5 Categories</span>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="category-chart" class="chart-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Spending Trend -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Daily Spending</h3>
+            <span class="text-muted" style="font-size: 0.875rem;">This Month</span>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="daily-chart" class="chart-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Vendors -->
+<div class="card mb-xl">
+    <div class="card-header">
+        <h3 class="card-title">Top Vendors</h3>
+        <span class="text-muted" style="font-size: 0.875rem;">By spending amount</span>
+    </div>
+    <div class="card-body">
+        <div class="table-container">
+            <table class="table table-sortable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable(0)">Vendor</th>
+                        <th onclick="sortTable(1)">Amount</th>
+                        <th onclick="sortTable(2)">Transactions</th>
+                        <th onclick="sortTable(3)">Avg/Transaction</th>
+                        <th>Category</th>
+                    </tr>
+                </thead>
+                <tbody id="vendors-table-body">
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 2rem;">
+                            <div class="loading loading-lg" style="margin: 0 auto;"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Recent Transactions</h3>
+        <a href="/reports" class="btn btn-sm">View All</a>
+    </div>
+    <div class="card-body">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Vendor</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions-table-body">
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 2rem;">
+                            <div class="loading loading-lg" style="margin: 0 auto;"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='/app.js') }}"></script>
+<script>
+    // Dashboard-specific initialization
+    document.addEventListener('DOMContentLoaded', function() {
+        const dashboard = new Dashboard();
+        dashboard.init();
+    });
+</script>
+{% endblock %}

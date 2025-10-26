@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Personal Finance Automation - Modern expense tracking and analysis">
+    <meta name="theme-color" content="#0E1116">
+
+    <title>{% block title %}Finance Automation{% endblock %}</title>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    💰 Finance Automation
+                </div>
+
+                <nav>
+                    <ul class="nav">
+                        <li>
+                            <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/reports" class="{% if request.url.path == '/reports' %}active{% endif %}">
+                                Reports
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/alerts" class="{% if request.url.path == '/alerts' %}active{% endif %}">
+                                Alerts
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+
+                <div class="flex items-center gap-md">
+                    <div class="text-muted" id="current-time" style="font-size: 0.875rem;">
+                        <!-- Live clock -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            {% block content %}
+            <!-- Page content goes here -->
+            {% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>
+                Finance Automation v1.0.0
+                <span style="margin: 0 8px;">•</span>
+                Built with FastAPI & Jinja2
+                <span style="margin: 0 8px;">•</span>
+                <span id="year"></span>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Base JavaScript -->
+    <script>
+        // Update current time
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            const clockEl = document.getElementById('current-time');
+            if (clockEl) {
+                clockEl.textContent = timeString;
+            }
+        }
+
+        // Update year in footer
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Initialize clock
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // Global error handler
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+        });
+
+        // Global utilities
+        window.FinanceApp = {
+            formatCurrency: function(cents, currency = 'USD') {
+                const amount = cents / 100;
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: currency
+                }).format(amount);
+            },
+
+            formatDate: function(dateString) {
+                const date = new Date(dateString);
+                return new Intl.DateTimeFormat('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                }).format(date);
+            },
+
+            formatPercent: function(value, decimals = 1) {
+                return (value * 100).toFixed(decimals) + '%';
+            },
+
+            showError: function(message) {
+                console.error(message);
+                // TODO: Implement toast notification
+                alert('Error: ' + message);
+            },
+
+            showSuccess: function(message) {
+                console.log(message);
+                // TODO: Implement toast notification
+            }
+        };
+
+        // Active nav link highlighting
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.nav a').forEach(link => {
+                if (link.getAttribute('href') === currentPath) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+
+    <!-- Page-specific JavaScript -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>

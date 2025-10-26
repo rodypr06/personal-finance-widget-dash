@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Finance Automation{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="flex justify-between items-center mb-xl">
+    <div>
+        <h1>Financial Reports</h1>
+        <p class="text-muted">Analyze your spending patterns and trends</p>
+    </div>
+
+    <!-- Export Buttons -->
+    <div class="flex gap-md">
+        <button class="btn btn-secondary" onclick="exportReport('csv')">
+            📊 Export CSV
+        </button>
+        <button class="btn btn-secondary" onclick="exportReport('pdf')">
+            📄 Export PDF
+        </button>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-xl">
+    <div class="card-header">
+        <h3 class="card-title">Filters</h3>
+        <button class="btn btn-sm" onclick="resetFilters()">Reset</button>
+    </div>
+    <div class="card-body">
+        <div class="grid grid-4">
+            <!-- Date Range -->
+            <div class="form-group">
+                <label class="form-label">Start Date</label>
+                <input type="date" id="start-date" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">End Date</label>
+                <input type="date" id="end-date" class="form-control">
+            </div>
+
+            <!-- Category Filter -->
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select id="category-filter" class="form-select" multiple size="3">
+                    <option value="">All Categories</option>
+                    <option value="groceries">Groceries</option>
+                    <option value="dining">Dining</option>
+                    <option value="transport">Transport</option>
+                    <option value="utilities">Utilities</option>
+                    <option value="subscriptions">Subscriptions</option>
+                    <option value="shopping">Shopping</option>
+                    <option value="healthcare">Healthcare</option>
+                    <option value="entertainment">Entertainment</option>
+                </select>
+            </div>
+
+            <!-- Apply Button -->
+            <div class="form-group" style="display: flex; align-items: flex-end;">
+                <button class="btn btn-primary" onclick="applyFilters()" style="width: 100%;">
+                    🔍 Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Statistics -->
+<div class="grid grid-4 mb-xl">
+    <div class="card summary-card">
+        <div class="summary-label">Total Transactions</div>
+        <div class="summary-value" id="report-total-txns">
+            <div class="loading"></div>
+        </div>
+        <div class="summary-change text-muted" id="report-date-range">--</div>
+    </div>
+
+    <div class="card summary-card">
+        <div class="summary-label">Average Daily</div>
+        <div class="summary-value text-blue" id="report-avg-daily">
+            <div class="loading"></div>
+        </div>
+        <div class="summary-change text-muted">Spending</div>
+    </div>
+
+    <div class="card summary-card">
+        <div class="summary-label">Largest Expense</div>
+        <div class="summary-value text-red" id="report-max-expense">
+            <div class="loading"></div>
+        </div>
+        <div class="summary-change text-muted" id="report-max-vendor">--</div>
+    </div>
+
+    <div class="card summary-card">
+        <div class="summary-label">Categories</div>
+        <div class="summary-value text-purple" id="report-category-count">
+            <div class="loading"></div>
+        </div>
+        <div class="summary-change text-muted">Active</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="grid grid-2 mb-xl">
+    <!-- Monthly Trend -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Monthly Trend</h3>
+            <span class="text-muted" style="font-size: 0.875rem;">Income vs Expenses</span>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="trend-chart" class="chart-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Comparison -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Category Comparison</h3>
+            <span class="text-muted" style="font-size: 0.875rem;">Top 10 by amount</span>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="category-bar-chart" class="chart-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Transactions Table -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Transaction Details</h3>
+        <div class="flex gap-md">
+            <span class="text-muted" style="font-size: 0.875rem;">
+                Showing <span id="showing-count">0</span> transactions
+            </span>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-container">
+            <table class="table table-sortable">
+                <thead>
+                    <tr>
+                        <th onclick="sortReportTable(0)">Date</th>
+                        <th onclick="sortReportTable(1)">Vendor</th>
+                        <th onclick="sortReportTable(2)">Description</th>
+                        <th onclick="sortReportTable(3)">Category</th>
+                        <th onclick="sortReportTable(4)">Amount</th>
+                        <th onclick="sortReportTable(5)">Account</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="report-table-body">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
+                            <div class="loading loading-lg" style="margin: 0 auto;"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-between items-center mt-lg">
+            <div class="text-muted" style="font-size: 0.875rem;">
+                Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+            </div>
+            <div class="flex gap-md">
+                <button class="btn btn-sm" onclick="previousPage()" id="prev-btn" disabled>
+                    ← Previous
+                </button>
+                <button class="btn btn-sm" onclick="nextPage()" id="next-btn">
+                    Next →
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='/app.js') }}"></script>
+<script>
+    // Reports-specific initialization
+    document.addEventListener('DOMContentLoaded', function() {
+        const reports = new Reports();
+        reports.init();
+    });
+
+    // Export functions
+    function exportReport(format) {
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+
+        const params = new URLSearchParams({
+            format: format,
+            start: startDate || '',
+            end: endDate || ''
+        });
+
+        // TODO: Implement actual export endpoint
+        console.log('Export', format, params.toString());
+        alert(`Export to ${format.toUpperCase()} - Coming soon!`);
+    }
+
+    // Filter management
+    function resetFilters() {
+        document.getElementById('start-date').value = '';
+        document.getElementById('end-date').value = '';
+        document.getElementById('category-filter').selectedIndex = 0;
+        applyFilters();
+    }
+
+    function applyFilters() {
+        if (window.reportsInstance) {
+            window.reportsInstance.loadData();
+        }
+    }
+
+    // Pagination
+    let currentPage = 1;
+    const pageSize = 50;
+
+    function nextPage() {
+        currentPage++;
+        if (window.reportsInstance) {
+            window.reportsInstance.loadTransactions(currentPage);
+        }
+    }
+
+    function previousPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            if (window.reportsInstance) {
+                window.reportsInstance.loadTransactions(currentPage);
+            }
+        }
+    }
+
+    // Table sorting
+    let sortColumn = 0;
+    let sortAsc = true;
+
+    function sortReportTable(column) {
+        if (sortColumn === column) {
+            sortAsc = !sortAsc;
+        } else {
+            sortColumn = column;
+            sortAsc = true;
+        }
+
+        if (window.reportsInstance) {
+            window.reportsInstance.sortTable(column, sortAsc);
+        }
+    }
+</script>
+{% endblock %}

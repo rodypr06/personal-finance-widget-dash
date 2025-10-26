@@ -1,0 +1,744 @@
+{
+  "name": "Finance - Google Drive Statement Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "name:Statements",
+          "mode": "name"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "name": "Watch Google Drive Statements Folder",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "statements-watcher",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "1",
+          "name": "Google Drive Account"
+        }
+      },
+      "notes": "Watches Statements/ folder for new files (CSV, OFX, PDF)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.mimeType}}",
+              "operation": "contains",
+              "value2": "csv"
+            },
+            {
+              "value1": "={{$json.mimeType}}",
+              "operation": "contains",
+              "value2": "ofx"
+            },
+            {
+              "value1": "={{$json.name}}",
+              "operation": "endsWith",
+              "value2": ".csv"
+            },
+            {
+              "value1": "={{$json.name}}",
+              "operation": "endsWith",
+              "value2": ".ofx"
+            }
+          ]
+        },
+        "combineOperation": "any"
+      },
+      "name": "Is CSV or OFX?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "notes": "Route to CSV/OFX parser or PDF extractor"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "doNotConvert": true
+            }
+          }
+        }
+      },
+      "name": "Download CSV/OFX File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [680, 200],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "1",
+          "name": "Google Drive Account"
+        }
+      },
+      "notes": "Download file content for parsing"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "name": "Download PDF File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [680, 400],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "1",
+          "name": "Google Drive Account"
+        }
+      },
+      "notes": "Download PDF for text extraction"
+    },
+    {
+      "parameters": {
+        "options": {
+          "delimiter": ",",
+          "headerRow": true
+        }
+      },
+      "name": "Parse CSV",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [900, 200],
+      "notes": "Parse CSV into JSON rows"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract text from PDF buffer\nconst PDFParser = require('pdf-parse');\n\nconst items = [];\nfor (const item of $input.all()) {\n  const pdfBuffer = Buffer.from(item.binary.data, 'base64');\n  const data = await PDFParser(pdfBuffer);\n  items.push({\n    json: {\n      text: data.text,\n      pages: data.numpages,\n      filename: item.json.name\n    }\n  });\n}\n\nreturn items;"
+      },
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400],
+      "notes": "Extract text content from PDF using pdf-parse"
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "model": "={{$env.OPENAI_MODEL || 'gpt-4o-mini'}}",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Extract transaction data from bank statement text and return ONLY a CSV with columns: date,description,amount,direction,mcc,memo. Use YYYY-MM-DD format for dates. Direction should be 'debit' or 'credit'. Return only the CSV, no markdown or explanations."
+            },
+            {
+              "role": "user",
+              "content": "={{$json.text}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1,
+          "maxTokens": 2000
+        }
+      },
+      "name": "OpenAI Extract CSV from PDF",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1120, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "2",
+          "name": "OpenAI Account"
+        }
+      },
+      "notes": "Use GPT to extract structured data from PDF text",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "options": {
+          "delimiter": ",",
+          "headerRow": true
+        }
+      },
+      "name": "Parse Extracted CSV",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1340, 400],
+      "notes": "Parse AI-extracted CSV data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize and compute hash_id for transactions\nconst crypto = require('crypto');\n\nconst items = [];\nfor (const item of $input.all()) {\n  const json = item.json;\n  \n  // Parse amount to cents\n  let amountCents = 0;\n  let direction = json.direction || 'debit';\n  \n  if (json.amount) {\n    const amount = parseFloat(String(json.amount).replace(/[$,]/g, ''));\n    amountCents = Math.round(Math.abs(amount) * 100);\n    \n    // Infer direction from sign if not provided\n    if (!json.direction) {\n      direction = amount < 0 ? 'debit' : 'credit';\n    }\n  }\n  \n  // Normalize date to YYYY-MM-DD\n  let txnDate = json.date || json.txn_date || new Date().toISOString().split('T')[0];\n  if (txnDate.includes('/')) {\n    const parts = txnDate.split('/');\n    if (parts.length === 3) {\n      // Handle MM/DD/YYYY or DD/MM/YYYY\n      const month = parts[0].padStart(2, '0');\n      const day = parts[1].padStart(2, '0');\n      const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];\n      txnDate = `${year}-${month}-${day}`;\n    }\n  }\n  \n  // Get descriptor and account\n  const descriptor = json.description || json.raw_descriptor || 'UNKNOWN';\n  const account = json.source_account || json.account || 'default';\n  \n  // Compute hash_id: sha256(date|amount_cents|descriptor|account)\n  const hashInput = `${txnDate}|${amountCents}|${descriptor}|${account}`;\n  const hashId = crypto.createHash('sha256').update(hashInput).digest('hex');\n  \n  // Build TxnIn payload\n  const payload = {\n    txn_date: txnDate,\n    amount_cents: amountCents,\n    currency: json.currency || 'USD',\n    direction: direction,\n    raw_descriptor: descriptor,\n    source_account: account,\n    memo: json.memo || null,\n    mcc: json.mcc || null,\n    hash_id: hashId\n  };\n  \n  items.push({\n    json: payload,\n    pairedItem: item.pairedItem\n  });\n}\n\nreturn items;"
+      },
+      "name": "Normalize & Hash Transactions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200],
+      "notes": "Normalize fields, compute hash_id (SHA256)"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.API_BASE_URL}}/api/ingest",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "txn_date",
+              "value": "={{$json.txn_date}}"
+            },
+            {
+              "name": "amount_cents",
+              "value": "={{$json.amount_cents}}"
+            },
+            {
+              "name": "currency",
+              "value": "={{$json.currency}}"
+            },
+            {
+              "name": "direction",
+              "value": "={{$json.direction}}"
+            },
+            {
+              "name": "raw_descriptor",
+              "value": "={{$json.raw_descriptor}}"
+            },
+            {
+              "name": "source_account",
+              "value": "={{$json.source_account}}"
+            },
+            {
+              "name": "memo",
+              "value": "={{$json.memo}}"
+            },
+            {
+              "name": "mcc",
+              "value": "={{$json.mcc}}"
+            },
+            {
+              "name": "hash_id",
+              "value": "={{$json.hash_id}}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retry": {
+              "maxTries": 3,
+              "waitBetweenTries": 1000
+            }
+          }
+        }
+      },
+      "name": "POST to /ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "API Authentication"
+        }
+      },
+      "notes": "Insert/update transaction in database",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "url": "={{$env.API_BASE_URL}}/api/categorize/{{$json.id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": false,
+        "options": {
+          "retry": {
+            "retry": {
+              "maxTries": 3,
+              "waitBetweenTries": 2000
+            }
+          }
+        }
+      },
+      "name": "POST to /categorize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "API Authentication"
+        }
+      },
+      "notes": "Apply rules + AI categorization",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "operation": "equals",
+              "value2": "review"
+            }
+          ]
+        }
+      },
+      "name": "Needs Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1780, 200],
+      "notes": "Check if transaction needs manual review"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "=🔍 Transaction needs review:\n\n💰 Amount: {{$json.amount_cents / 100}} {{$json.currency}}\n🏪 Vendor: {{$json.canonical_vendor || $json.raw_descriptor}}\n📅 Date: {{$json.txn_date}}\n📂 Category: {{$json.category}} ({{Math.round($json.confidence * 100)}}% confidence)\n\nApprove? /approve_{{$json.id}} or /edit_{{$json.id}}",
+        "additionalFields": {
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "buttons": [
+                  {
+                    "text": "✅ Approve",
+                    "callbackData": "/approve_{{$json.id}}"
+                  },
+                  {
+                    "text": "✏️ Edit",
+                    "callbackData": "/edit_{{$json.id}}"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "name": "Send Telegram Review Request",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [2000, 100],
+      "credentials": {
+        "telegramApi": {
+          "id": "4",
+          "name": "Telegram Bot"
+        }
+      },
+      "notes": "Optional: Send notification for low-confidence transactions"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.API_BASE_URL}}/api/finalize/{{$json.id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "category",
+              "value": "={{$json.category}}"
+            },
+            {
+              "name": "subcategory",
+              "value": "={{$json.subcategory}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "POST to /finalize (Auto)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2000, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "API Authentication"
+        }
+      },
+      "notes": "Auto-finalize high-confidence transactions"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Search for receipts in Google Drive matching transaction\n// Returns search query for Google Drive\n\nconst items = [];\nfor (const item of $input.all()) {\n  const json = item.json;\n  \n  // Parse transaction date\n  const txnDate = new Date(json.txn_date);\n  \n  // Create date range: ±3 days\n  const startDate = new Date(txnDate);\n  startDate.setDate(startDate.getDate() - 3);\n  const endDate = new Date(txnDate);\n  endDate.setDate(endDate.getDate() + 3);\n  \n  // Calculate amount tolerance: ±10%\n  const amountCents = json.amount_cents;\n  const minAmount = Math.round(amountCents * 0.9);\n  const maxAmount = Math.round(amountCents * 1.1);\n  \n  // Extract vendor keywords for filename search\n  const descriptor = json.canonical_vendor || json.raw_descriptor || '';\n  const keywords = descriptor\n    .replace(/[^a-zA-Z0-9\\s]/g, '')\n    .split(/\\s+/)\n    .filter(w => w.length > 3)\n    .slice(0, 3)\n    .join(' ');\n  \n  items.push({\n    json: {\n      transaction_id: json.id,\n      amount_cents: amountCents,\n      min_amount: minAmount,\n      max_amount: maxAmount,\n      start_date: startDate.toISOString().split('T')[0],\n      end_date: endDate.toISOString().split('T')[0],\n      search_keywords: keywords,\n      search_query: `name contains '${keywords}' and modifiedTime >= '${startDate.toISOString()}' and modifiedTime <= '${endDate.toISOString()}' and mimeType contains 'image'`\n    },\n    pairedItem: item.pairedItem\n  });\n}\n\nreturn items;"
+      },
+      "name": "Build Receipt Search Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 500],
+      "notes": "Create search parameters for receipt matching"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "queryString": "={{$json.search_query}}",
+        "limit": 5,
+        "options": {}
+      },
+      "name": "Search Google Drive for Receipts",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2000, 500],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "1",
+          "name": "Google Drive Account"
+        }
+      },
+      "notes": "Find potential receipt matches in Drive"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.length || 0}}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Receipt Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2220, 500],
+      "notes": "Check if any receipts were found"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.API_BASE_URL}}/api/transactions/{{$json.transaction_id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "method": "PATCH",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "receipt_url",
+              "value": "=https://drive.google.com/file/d/{{$json[0].id}}/view"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "PATCH Receipt URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2440, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "API Authentication"
+        }
+      },
+      "notes": "Update transaction with receipt link"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll"
+      },
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [2220, 300],
+      "notes": "Combine all processing branches"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log workflow completion\nconst items = $input.all();\n\nconsole.log('=== Drive Ingestion Workflow Complete ===');\nconsole.log(`Processed ${items.length} transaction(s)`);\n\nfor (const item of items) {\n  console.log(`- ID: ${item.json.id}, Status: ${item.json.status}, Category: ${item.json.category}`);\n}\n\nreturn items;"
+      },
+      "name": "Log Completion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300],
+      "notes": "Log successful processing"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error handler - log and optionally notify\nconst error = $input.first();\n\nconsole.error('=== Workflow Error ===');\nconsole.error('Error:', error.error);\nconsole.error('Node:', error.node);\nconsole.error('Item:', JSON.stringify(error.json, null, 2));\n\nreturn [{\n  json: {\n    error: true,\n    message: error.error?.message || 'Unknown error',\n    node: error.node?.name || 'Unknown',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 600],
+      "notes": "Handle and log errors"
+    }
+  ],
+  "connections": {
+    "Watch Google Drive Statements Folder": {
+      "main": [
+        [
+          {
+            "node": "Is CSV or OFX?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is CSV or OFX?": {
+      "main": [
+        [
+          {
+            "node": "Download CSV/OFX File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download PDF File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download CSV/OFX File": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF File": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Hash Transactions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Extract CSV from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Extract CSV from PDF": {
+      "main": [
+        [
+          {
+            "node": "Parse Extracted CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Extracted CSV": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Hash Transactions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Hash Transactions": {
+      "main": [
+        [
+          {
+            "node": "POST to /ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST to /ingest": {
+      "main": [
+        [
+          {
+            "node": "POST to /categorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST to /categorize": {
+      "main": [
+        [
+          {
+            "node": "Needs Review?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Receipt Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Review?": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Review Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "POST to /finalize (Auto)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Review Request": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST to /finalize (Auto)": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Receipt Search Query": {
+      "main": [
+        [
+          {
+            "node": "Search Google Drive for Receipts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Google Drive for Receipts": {
+      "main": [
+        [
+          {
+            "node": "Receipt Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receipt Found?": {
+      "main": [
+        [
+          {
+            "node": "PATCH Receipt URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PATCH Receipt URL": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Log Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "Error Handler"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z",
+      "id": "1",
+      "name": "finance"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

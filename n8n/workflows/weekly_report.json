@@ -1,0 +1,413 @@
+{
+  "name": "Finance - Weekly Summary Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "name": "Schedule: Every Monday 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "notes": "Trigger weekly report generation every Monday at 9:00 AM"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate date range for last week\nconst now = new Date();\nconst lastMonday = new Date(now);\nlastMonday.setDate(now.getDate() - now.getDay() - 6); // Previous Monday\nlastMonday.setHours(0, 0, 0, 0);\n\nconst lastSunday = new Date(lastMonday);\nlastSunday.setDate(lastMonday.getDate() + 6); // Previous Sunday\nlastSunday.setHours(23, 59, 59, 999);\n\nconst startDate = lastMonday.toISOString().split('T')[0];\nconst endDate = lastSunday.toISOString().split('T')[0];\nconst period = `${startDate}_to_${endDate}`;\n\nreturn [{\n  json: {\n    start_date: startDate,\n    end_date: endDate,\n    period: period,\n    week_number: getWeekNumber(lastMonday),\n    year: lastMonday.getFullYear()\n  }\n}];\n\n// Helper function to get ISO week number\nfunction getWeekNumber(date) {\n  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));\n  const dayNum = d.getUTCDay() || 7;\n  d.setUTCDate(d.getUTCDate() + 4 - dayNum);\n  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));\n  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);\n}"
+      },
+      "name": "Calculate Last Week Dates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "notes": "Calculate start and end dates for previous week"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.API_BASE_URL}}/api/report/summary",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "start_date",
+              "value": "={{$json.start_date}}"
+            },
+            {
+              "name": "end_date",
+              "value": "={{$json.end_date}}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retry": {
+              "maxTries": 3,
+              "waitBetweenTries": 2000
+            }
+          }
+        }
+      },
+      "name": "GET Weekly Summary Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "API Authentication"
+        }
+      },
+      "notes": "Fetch aggregated financial data for the week",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format summary data for AI analysis\nconst item = $input.first();\nconst summary = item.json;\n\n// Calculate key metrics\nconst totalSpent = summary.totals_by_category\n  .filter(c => c.category !== 'Income' && c.category !== 'Savings')\n  .reduce((sum, c) => sum + c.amount_cents, 0);\n\nconst totalIncome = summary.totals_by_category\n  .filter(c => c.category === 'Income')\n  .reduce((sum, c) => sum + c.amount_cents, 0);\n\nconst topCategory = summary.totals_by_category\n  .filter(c => c.category !== 'Income' && c.category !== 'Savings')\n  .sort((a, b) => b.amount_cents - a.amount_cents)[0];\n\nconst dailyAverage = summary.timeseries\n  .reduce((sum, day) => sum + day.sum_cents, 0) / summary.timeseries.length;\n\n// Format for AI prompt\nconst formattedData = {\n  period: summary.period,\n  total_spent_usd: (totalSpent / 100).toFixed(2),\n  total_income_usd: (totalIncome / 100).toFixed(2),\n  net_savings_usd: ((totalIncome - totalSpent) / 100).toFixed(2),\n  daily_average_usd: (dailyAverage / 100).toFixed(2),\n  top_category: topCategory?.category || 'N/A',\n  top_category_amount_usd: ((topCategory?.amount_cents || 0) / 100).toFixed(2),\n  top_vendors: summary.top_vendors.slice(0, 5).map(v => ({\n    vendor: v.vendor,\n    amount_usd: (v.amount_cents / 100).toFixed(2)\n  })),\n  category_breakdown: summary.totals_by_category\n    .filter(c => c.category !== 'Income' && c.category !== 'Savings')\n    .map(c => ({\n      category: c.category,\n      amount_usd: (c.amount_cents / 100).toFixed(2),\n      percentage: ((c.amount_cents / totalSpent) * 100).toFixed(1)\n    }))\n};\n\nreturn [{\n  json: {\n    raw_summary: summary,\n    formatted_data: formattedData,\n    period: summary.period\n  }\n}];"
+      },
+      "name": "Format Data for AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "notes": "Calculate metrics and format data for AI analysis"
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "model": "={{$env.OPENAI_MODEL || 'gpt-4o-mini'}}",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a financial advisor providing personalized weekly spending insights. Analyze the user's spending data and provide:\n1. A brief summary of their financial week (2-3 sentences)\n2. Key highlights (top spending category, notable trends)\n3. ONE specific, actionable habit improvement suggestion for better saving\n4. Encouragement or positive reinforcement\n\nKeep the tone friendly, supportive, and motivating. Format the response in markdown."
+            },
+            {
+              "role": "user",
+              "content": "=Here's my financial data for week {{$json.period}}:\n\n**Summary:**\n- Total Spent: ${{$json.formatted_data.total_spent_usd}}\n- Total Income: ${{$json.formatted_data.total_income_usd}}\n- Net Savings: ${{$json.formatted_data.net_savings_usd}}\n- Daily Average: ${{$json.formatted_data.daily_average_usd}}\n\n**Top Category:** {{$json.formatted_data.top_category}} (${{$json.formatted_data.top_category_amount_usd}})\n\n**Top 5 Vendors:**\n{{$json.formatted_data.top_vendors.map(v => `- ${v.vendor}: $${v.amount_usd}`).join('\\n')}}\n\n**Category Breakdown:**\n{{$json.formatted_data.category_breakdown.map(c => `- ${c.category}: $${c.amount_usd} (${c.percentage}%)`).join('\\n')}}\n\nProvide your analysis and one habit improvement suggestion."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        }
+      },
+      "name": "OpenAI Generate Insights",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1120, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "2",
+          "name": "OpenAI Account"
+        }
+      },
+      "notes": "Use GPT to generate personalized financial insights",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine AI insights with raw data for storage\nconst item = $input.first();\nconst previousData = $node['Format Data for AI'].json;\n\nconst aiResponse = item.json.choices[0].message.content;\n\nreturn [{\n  json: {\n    period: previousData.period,\n    kind: 'weekly',\n    summary: aiResponse,\n    metrics: previousData.formatted_data,\n    raw_data: previousData.raw_summary\n  }\n}];"
+      },
+      "name": "Build Report Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300],
+      "notes": "Combine AI insights with metrics for storage"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.API_BASE_URL}}/api/reports",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "period",
+              "value": "={{$json.period}}"
+            },
+            {
+              "name": "kind",
+              "value": "weekly"
+            },
+            {
+              "name": "payload",
+              "value": "={{JSON.stringify($json)}}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retry": {
+              "maxTries": 3,
+              "waitBetweenTries": 1000
+            }
+          }
+        }
+      },
+      "name": "POST to /reports",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "API Authentication"
+        }
+      },
+      "notes": "Store weekly report in database",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$env.TELEGRAM_CHAT_ID}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Telegram Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1780, 300],
+      "notes": "Check if Telegram notifications are configured"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "=📊 **Weekly Financial Report**\n\n{{$json.summary}}\n\n---\n\n💰 **Quick Stats:**\n- Spent: ${{$json.metrics.total_spent_usd}}\n- Saved: ${{$json.metrics.net_savings_usd}}\n- Top Category: {{$json.metrics.top_category}} (${{$json.metrics.top_category_amount_usd}})\n\n🔗 [View Full Report]({{$env.DASHBOARD_URL}}/reports/{{$json.period}})",
+        "additionalFields": {
+          "parseMode": "Markdown",
+          "disableWebPagePreview": false
+        }
+      },
+      "name": "Send Telegram Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [2000, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "4",
+          "name": "Telegram Bot"
+        }
+      },
+      "notes": "Send weekly summary via Telegram"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log workflow completion\nconst item = $input.first();\n\nconsole.log('=== Weekly Report Generated ===');\nconsole.log(`Period: ${item.json.period}`);\nconsole.log(`Total Spent: $${item.json.metrics.total_spent_usd}`);\nconsole.log(`Net Savings: $${item.json.metrics.net_savings_usd}`);\nconsole.log(`Top Category: ${item.json.metrics.top_category}`);\nconsole.log('Report stored successfully');\n\nreturn [item];"
+      },
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 400],
+      "notes": "Log successful report generation"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll"
+      },
+      "name": "Merge Branches",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [2220, 300],
+      "notes": "Combine notification and logging branches"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error handler for weekly report workflow\nconst error = $input.first();\n\nconsole.error('=== Weekly Report Workflow Error ===');\nconsole.error('Error:', error.error);\nconsole.error('Node:', error.node);\nconsole.error('Details:', JSON.stringify(error.json, null, 2));\n\n// Optionally send error notification via Telegram\nif (process.env.TELEGRAM_CHAT_ID) {\n  return [{\n    json: {\n      error: true,\n      message: `❌ Weekly report failed: ${error.error?.message || 'Unknown error'}`,\n      timestamp: new Date().toISOString(),\n      send_telegram: true\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    error: true,\n    message: error.error?.message || 'Unknown error',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 500],
+      "notes": "Handle and log errors, optionally notify"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "={{$json.message}}\n\nTime: {{$json.timestamp}}",
+        "additionalFields": {}
+      },
+      "name": "Send Error Notification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1560, 500],
+      "credentials": {
+        "telegramApi": {
+          "id": "4",
+          "name": "Telegram Bot"
+        }
+      },
+      "notes": "Notify about workflow errors via Telegram"
+    }
+  ],
+  "connections": {
+    "Schedule: Every Monday 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Calculate Last Week Dates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Last Week Dates": {
+      "main": [
+        [
+          {
+            "node": "GET Weekly Summary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Weekly Summary Data": {
+      "main": [
+        [
+          {
+            "node": "Format Data for AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Data for AI": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Generate Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Generate Insights": {
+      "main": [
+        [
+          {
+            "node": "Build Report Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report Payload": {
+      "main": [
+        [
+          {
+            "node": "POST to /reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST to /reports": {
+      "main": [
+        [
+          {
+            "node": "Telegram Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Report": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Success": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Send Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "Error Handler"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z",
+      "id": "1",
+      "name": "finance"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
